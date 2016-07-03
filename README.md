@@ -1,7 +1,8 @@
-#Group Butler
+#api anti spam
 
 ##Introduction
-
+_*فارسی سازی و ویرایش توسط اسپیشال تیم*_
+[special team](https://telegram.me/specialteam_ch)
 This bot has been created to help people in the administration of a group, with a lot of useful tools.
 
 This bot born as an [Otouto](https://github.com/topkecleon/otouto) [v3.1](https://github.com/topkecleon/otouto/tree/26c1299374af130bbf8457af904cb4ea450caa51) ([@mokubot](https://telegram.me/mokubot)), but has been turned in an administration bot.
