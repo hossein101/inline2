@@ -4,6 +4,8 @@ URL = require('socket.url')
 JSON = require('dkjson')
 redis = require('redis')
 clr = require 'term.colors'
+clr.wb = clr.onwhite..clr.blue
+clr.wr = clr.onwhite..clr.red
 db = Redis.connect('127.0.0.1', 6379)
 --db:select(0)
 serpent = require('serpent')
@@ -24,8 +26,7 @@ bot_init = function(on_reload) -- The function run when the bot is started or re
 	print('Loading API functions table...')
 	api = require('methods')
 	
-	current_m = 0
-	last_m = 0
+	tot = 0
 	
 	bot = nil
 	while not bot do -- Get bot info and retry if unable to connect.
@@ -39,12 +40,12 @@ bot_init = function(on_reload) -- The function run when the bot is started or re
 		local p = dofile('plugins/'..v)
 		table.insert(plugins, p)
 	end
-	print(clr.red..'Plugins loaded:', #plugins)
+	print(clr.wr..'پلاگین ها بروز شدند:', #plugins)
 
-	print('\n'..clr.blue..'BOT RUNNING:'..clr.reset, clr.red..'[@'..bot.username .. '] [' .. bot.first_name ..'] ['..bot.id..']'..clr.reset..'\n')
+	print('\n'..clr.wb..'ربات اجرا شد:'..clr.reset, clr.wr..'[@'..bot.username .. '] [' .. bot.first_name ..'] ['..bot.id..']'..clr.reset)
 	if not on_reload then
 		db:hincrby('bot:general', 'starts', 1)
-		api.sendAdmin('*Bot started!*\n_'..os.date('On %A, %d %B %Y\nAt %X')..'_\n'..#plugins..' plugins loaded', true)
+		api.sendAdmin('*بابایی من  روشن شدم😄*\n_'..os.date('On %A, %d %B %Y\nAt %X')..'_\n'..#plugins..' پلاگین اجرا شدند', true)
 	end
 	
 	-- Generate a random seed and "pop" the first random number. :)
@@ -95,46 +96,42 @@ local function get_what(msg)
 end
 
 local function collect_stats(msg)
+	--count the number of messages
+	db:hincrby('bot:general', 'messages', 1)
 	
-	if not msg.cb then --ignore taps on inline keyboards
-		
-		--count the number of messages
-		db:hincrby('bot:general', 'messages', 1)
-		
-		--for resolve username
-		if msg.from and msg.from.username then
-			db:hset('bot:usernames', '@'..msg.from.username:lower(), msg.from.id)
-			db:hset('bot:usernames:'..msg.chat.id, '@'..msg.from.username:lower(), msg.from.id)
-		end
-		if msg.forward_from and msg.forward_from.username then
-			db:hset('bot:usernames', '@'..msg.forward_from.username:lower(), msg.forward_from.id)
-			db:hset('bot:usernames:'..msg.chat.id, '@'..msg.forward_from.username:lower(), msg.forward_from.id)
-		end
-		
-		--group stats
-		if not(msg.chat.type == 'private') then
-			--user in the group stats
-			if msg.from.id then
-				db:hset('chat:'..msg.chat.id..':userlast', msg.from.id, os.time()) --last message for each user
-				db:hincrby('chat:'..msg.chat.id..':userstats', msg.from.id, 1) --number of messages for each user
-				if msg.media then	
-					db:hincrby('chat:'..msg.chat.id..':usermedia', msg.from.id, 1)
-				end
-			end
-			db:incrby('chat:'..msg.chat.id..':totalmsgs', 1) --total number of messages of the group
-		end
-		
-		--user stats
-		if msg.from then
-			db:hincrby('user:'..msg.from.id, 'msgs', 1)
-			if msg.media then
-				db:hincrby('user:'..msg.from.id, 'media', 1)
+	--for resolve username
+	if msg.from and msg.from.username then
+		db:hset('bot:usernames', '@'..msg.from.username:lower(), msg.from.id)
+		db:hset('bot:usernames:'..msg.chat.id, '@'..msg.from.username:lower(), msg.from.id)
+	end
+	if msg.forward_from and msg.forward_from.username then
+		db:hset('bot:usernames', '@'..msg.forward_from.username:lower(), msg.forward_from.id)
+		db:hset('bot:usernames:'..msg.chat.id, '@'..msg.forward_from.username:lower(), msg.forward_from.id)
+	end
+	
+	--group stats
+	if not(msg.chat.type == 'private') then
+		--user in the group stats
+		if msg.from.id then
+			db:hset('chat:'..msg.chat.id..':userlast', msg.from.id, os.time()) --last message for each user
+			db:hincrby('chat:'..msg.chat.id..':userstats', msg.from.id, 1) --number of messages for each user
+			if msg.media then	
+				db:hincrby('chat:'..msg.chat.id..':usermedia', msg.from.id, 1)
 			end
 		end
-		
-		if msg.cb and msg.from and msg.chat then
-			db:hincrby('chat:'..msg.chat.id..':cb', msg.from.id, 1)
+		db:incrby('chat:'..msg.chat.id..':totalmsgs', 1) --total number of messages of the group
+	end
+	
+	--user stats
+	if msg.from then
+		db:hincrby('user:'..msg.from.id, 'msgs', 1)
+		if msg.media then
+			db:hincrby('user:'..msg.from.id, 'media', 1)
 		end
+	end
+	
+	if msg.cb and msg.from and msg.chat then
+		db:hincrby('chat:'..msg.chat.id..':cb', msg.from.id, 1)
 	end
 end
 
@@ -188,35 +185,32 @@ on_msg_receive = function(msg) -- The fn run whenever a message is received.
 					for k,w in pairs(plugin.triggers) do
 						local blocks = match_pattern(w, msg.text)
 						if blocks then
-							
 							--workaround for the stupid bug
 							if not(msg.chat.type == 'private') and not db:exists('chat:'..msg.chat.id..':settings') and not msg.service then
 								cross.initGroup(msg.chat.id)
+								api.sendLog('#initGroup\n'..vtext(msg.chat)..vtext(msg.from))
 							end
-							
 							--print in the terminal
-							print(clr.reset..clr.blue..'['..os.date('%X')..']'..clr.red..' '..w..clr.reset..' '..get_from(msg)..' -> ['..msg.chat.id..'] ['..msg.chat.type..']')
-							
+							print('\n'..clr.reset..clr.blue..clr.onwhite..'['..os.date('%X')..']'..clr.reset, get_from(msg))
+							print(clr.blue..clr.onwhite..'[CHAT]\t', clr.reset..'['..msg.chat.id..'] ['..msg.chat.type..']')
 							--print the match
 							if blocks[1] ~= '' then
+      							print(clr.reset..clr.blue..clr.onwhite..'[TRIGGER]', clr.reset..clr.red..clr.onwhite..w..clr.reset)
       							db:hincrby('bot:general', 'query', 1)
       							if msg.from then db:incrby('user:'..msg.from.id..':query', 1) end
       						end
-							
-							--execute the plugin
+							--execute plugin
 							local success, result = pcall(function()
 								return plugin.action(msg, blocks, msg.lang)
 							end)
-							
 							--if bugs
 							if not success then
+								api.sendReply(msg, '*دوست عزیز این یک باگ است*\nلطفا این را گزارش دهید به صورت `اول علامت !بذارید و بعدش گزارش مشکل با تشکر` :)', true)
 								print(msg.text, result)
-								api.sendReply(msg, '*This is a bug!*\nPlease report the problem with `"/c"` command :)', true)
 								save_log('errors', result, msg.from.id or false, msg.chat.id or false, msg.text or false)
-          						api.sendAdmin('An #error occurred.\n'..result..'\n'..msg.lang..'\n'..msg.text)
+          						api.sendLog('An #error occurred.\n'..result)
 								return
 							end
-							
 							-- If the action returns a table, make that table msg.
 							if type(result) == 'table' then
 								msg = result
@@ -363,7 +357,7 @@ while is_started do -- Start a loop while the bot should be running.
 		--vardump(res)
 		for i,msg in ipairs(res.result) do -- Go through every new message.
 			last_update = msg.update_id
-			current_m = current_m + 1
+			tot = tot + 1
 			if msg.message  or msg.callback_query --[[or msg.edited_message]]then
 				--[[if msg.edited_message then
 					msg.message = msg.edited_message
@@ -391,8 +385,7 @@ while is_started do -- Start a loop while the bot should be running.
 	end
 	if last_cron ~= os.date('%M') then -- Run cron jobs every minute.
 		last_cron = os.date('%M')
-		last_m = current_m
-		current_m = 0
+		--db:bgsave()
 		for i,v in ipairs(plugins) do
 			if v.cron then -- Call each plugin's cron function, if it has one.
 				local res, err = pcall(function() v.cron() end)
